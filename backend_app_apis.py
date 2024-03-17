@@ -6,10 +6,14 @@ import os
 import logging
 from datetime import datetime
 from lm_eval import tasks, evaluator, utils
+from pydantic import BaseModel
 
 logging.getLogger("openai").setLevel(logging.WARNING)
 
 app = FastAPI()
+
+class EvalRequest(BaseModel):
+    args: str
 
 @app.get("/check/")
 async def check():
@@ -17,12 +21,12 @@ async def check():
 
 
 @app.post("/run_evaluation/")
-async def run_evaluation_api(eval_request):
+async def run_evaluation_api(eval_request: EvalRequest):
     task_names = ["medmcqa", "medqa_4options", "mmlu_anatomy", "mmlu_clinical_knowledge", "mmlu_college_biology", "mmlu_college_medicine", "mmlu_medical_genetics", "mmlu_professional_medicine", "pubmedqa"]
     try:
         results = evaluator.simple_evaluate(
             model="hf",
-            model_args=eval_request,
+            model_args=eval_request.args,
             tasks=task_names,
             batch_size="auto",
             device="cuda:0",
