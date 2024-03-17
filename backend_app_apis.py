@@ -46,3 +46,13 @@ async def run_evaluation_api(eval_request: EvalRequest):
 
 if __name__ == "__main__":
     uvicorn.run("run_app:app", host="127.0.0.1", port=8000, log_level="info")
+
+
+
+# example use
+
+# import requests
+# url = 'https://c4f6-34-70-184-231.ngrok-free.app/run_evaluation/'
+# data = {"args": "pretrained=microsoft/phi-2"}
+# response = requests.post(url, json=data)
+# print(response.json())
