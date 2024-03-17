@@ -1,58 +1,48 @@
-from fastapi import FastAPI, HTTPException, Body
-from pydantic import BaseModel
-import uvicorn
 import json
 import os
 import logging
 from datetime import datetime
+
 from lm_eval import tasks, evaluator, utils
-from pydantic import BaseModel
+
+from src.envs import RESULTS_REPO, API
+from src.backend.manage_requests import EvalRequest
 
 logging.getLogger("openai").setLevel(logging.WARNING)
 
-app = FastAPI()
+def run_evaluation(eval_request: EvalRequest, task_names, num_fewshot, batch_size, device, local_dir: str, results_repo: str, no_cache=True, limit=None):
+    if limit:
+        print(
+            "WARNING: --limit SHOULD ONLY BE USED FOR TESTING. REAL METRICS SHOULD NOT BE COMPUTED USING LIMIT."
+        )
+    task_names = ["medmcqa", "medqa_4options", "mmlu_anatomy", "mmlu_clinical_knowledge", "mmlu_college_biology", "mmlu_college_medicine", "mmlu_medical_genetics", "mmlu_professional_medicine", "pubmedqa"]
 
-class EvalRequest(BaseModel):
-    args: str
+    print(f"Selected Tasks: {task_names}")
 
-@app.get("/check/")
-async def check_api():
-  return "Hello World, it's working"
+    url = 'https://c4f6-34-70-184-231.ngrok-free.app/run_evaluation/'
+    data = {"args": eval_request.model}  # Replace with your actual data
+    response = requests.post(url, json=data)
 
-@app.post("/run_evaluation/")
-async def run_evaluation_api(eval_request: EvalRequest):
-    # task_names = ["medmcqa", "medqa_4options", "mmlu_anatomy", "mmlu_clinical_knowledge", "mmlu_college_biology", "mmlu_college_medicine", "mmlu_medical_genetics", "mmlu_professional_medicine", "pubmedqa"]
-    task_names = ["mmlu_medical_genetics", "mmlu_professional_medicine"]
+    results = response.json()['result']
+    results["config"]["model_dtype"] = eval_request.precision
+    results["config"]["model_name"] = eval_request.model
+    results["config"]["model_sha"] = eval_request.revision
 
-    try:
-        results = evaluator.simple_evaluate(
-            model="hf",
-            model_args=eval_request.args,
-            tasks=task_names,
-            batch_size="auto",
-            device="cuda:0",
-            limit=None,
-            write_out=True
-            )
+    dumped = json.dumps(results, indent=2)
+    # print(dumped)
 
-        results = {key: value for key, value in results .items() if key in ['results']}
-        results_ = {'status': True, 'result': results}
-  
-    except Exception as e:
-        logger.error(f"Error during evaluation: {e}")
-        return {'status': False, 'error': str(e)}
-    
-    return results_
+    output_path = os.path.join(local_dir, *eval_request.model.split("/"), f"results_{datetime.now()}.json")
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    with open(output_path, "w") as f:
+        f.write(dumped)
 
-if __name__ == "__main__":
-    uvicorn.run("run_app:app", host="127.0.0.1", port=8000, log_level="info")
+    print(evaluator.make_table(results))
 
+    API.upload_file(
+        path_or_fileobj=output_path,
+        path_in_repo=f"{eval_request.model}/results_{datetime.now()}.json",
+        repo_id=results_repo,
+        repo_type="dataset",
+    )
 
-
-# example use
-
-# import requests
-# url = 'https://c4f6-34-70-184-231.ngrok-free.app/run_evaluation/'
-# data = {"args": "pretrained=microsoft/phi-2"}
-# response = requests.post(url, json=data)
-# print(response.json())
+    return results
