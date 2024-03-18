@@ -8,6 +8,22 @@ from datetime import datetime
 from lm_eval import tasks, evaluator, utils
 from pydantic import BaseModel
 
+import subprocess
+
+def delete_hf_models():
+    # Define the path to the Hugging Face cache directory
+    cache_dir = "~/.cache/huggingface/"
+    
+    # Construct the command to delete the directory
+    cmd = f"rm -rf {cache_dir}"
+    
+    try:
+        # Execute the command
+        subprocess.run(cmd, shell=True, check=True)
+        print("Hugging Face cache directory deleted successfully.")
+    except subprocess.CalledProcessError as e:
+        print(f"Error deleting Hugging Face cache directory: {e}")
+
 logging.getLogger("openai").setLevel(logging.WARNING)
 
 app = FastAPI()
@@ -38,6 +54,7 @@ async def run_evaluation_api(eval_request: EvalRequest):
 
         results = {key: value for key, value in results .items() if key in ['results']}
         results_ = {'status': True, 'result': results}
+        delete_hf_models()
   
     except Exception as e:
         logger.error(f"Error during evaluation: {e}")
